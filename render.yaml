@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: civiclens
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    buildCommand: cd client && npm install --legacy-peer-deps && npm run build && cd ../server && npm install
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_MODE
+        value: "true"
+      - key: PORT
+        value: "3001"
+    healthCheckPath: /api/health
+    autoDeploy: true
