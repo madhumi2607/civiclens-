@@ -355,10 +355,19 @@ function ClusterDrawer({ cluster, workOrder, rootCause, rcLoading, onClose, onRe
             <p className="text-[10px] text-gray-500 dark:text-slate-500 mb-1">Reports</p>
             <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto">
               {cluster.members.map((m) => (
-                <div key={m.id} className="flex items-center gap-2 text-[11px]">
+                <div key={m.id} className="flex items-center gap-2 text-[11px] flex-wrap">
                   <span className="font-mono text-amber-700 dark:text-amber-500">{m.id}</span>
                   <span className="text-gray-500 dark:text-slate-500 truncate">{m.street}</span>
                   <span className="text-gray-400 dark:text-slate-600 ml-auto flex-shrink-0">sev {m.severity}</span>
+                  {m.reporterName && (
+                    <span className="text-[10px] text-gray-400 dark:text-slate-500 flex-shrink-0">
+                      {m.reporterName}
+                      {m.verificationStatus === 'auto_verified' && ' ✓'}
+                    </span>
+                  )}
+                  {m.verificationFlag === 'location_mismatch' && (
+                    <span className="text-[10px] text-orange-500 flex-shrink-0">⚠️</span>
+                  )}
                   {(m.confirmedBy ?? 1) > 1 && (
                     <span className="text-[10px] text-blue-500 flex-shrink-0">{m.confirmedBy}✓</span>
                   )}
@@ -674,6 +683,256 @@ function CustomReportsTab({ customReports, localOverrides, onCategorize, onAssig
   )
 }
 
+// ── Trust score color ─────────────────────────────────────────────────────────
+function trustColor(score) {
+  if (score > 80)  return 'text-green-600 dark:text-green-400'
+  if (score >= 50) return 'text-blue-600 dark:text-blue-400'
+  if (score >= 30) return 'text-orange-600 dark:text-orange-400'
+  return 'text-red-600 dark:text-red-400'
+}
+function trustLabel(score) {
+  if (score > 80)  return 'Trusted'
+  if (score >= 50) return 'Standard'
+  if (score >= 30) return 'Under Review'
+  return 'Restricted'
+}
+
+// ── Users Tab ─────────────────────────────────────────────────────────────────
+function UsersTab({ reports, onNavigate }) {
+  const [users, setUsers] = useState([])
+  const [selectedUser, setSelectedUser] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then((r) => r.ok ? r.json() : { users: [] })
+      .then(({ users: u }) => setUsers(u))
+      .catch(() => {})
+  }, [])
+
+  if (selectedUser) {
+    const userReports = reports.filter((r) => r.reportedBy === selectedUser.id)
+    return (
+      <div className="flex-1 overflow-auto p-4">
+        <button onClick={() => setSelectedUser(null)} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 mb-4">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          Back to Users
+        </button>
+        <div className="flex items-start gap-4 mb-4">
+          <div>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{selectedUser.name}</h3>
+            <p className="text-xs text-gray-500 dark:text-slate-400">{selectedUser.phone} · {selectedUser.area}</p>
+            <span className={`text-sm font-bold ${trustColor(selectedUser.trustScore)}`}>
+              Trust {selectedUser.trustScore}/100 · {trustLabel(selectedUser.trustScore)}
+            </span>
+          </div>
+          <div className="ml-auto grid grid-cols-4 gap-2 text-center">
+            {[['Reports', selectedUser.reportIds?.length ?? 0, ''], ['Verified', selectedUser.verifiedCount, 'text-blue-600 dark:text-blue-400'], ['Resolved', selectedUser.resolvedCount, 'text-green-600 dark:text-green-400'], ['Rejected', selectedUser.rejectedCount, 'text-red-600 dark:text-red-400']].map(([l,v,c]) => (
+              <div key={l} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-2">
+                <div className="text-[10px] text-gray-500 dark:text-slate-500">{l}</div>
+                <div className={`text-sm font-bold ${c || 'text-gray-800 dark:text-slate-50'}`}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="text-[11px] text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+              <th className="text-left pb-2 font-semibold pr-3">ID</th>
+              <th className="text-left pb-2 font-semibold pr-3">Type</th>
+              <th className="text-left pb-2 font-semibold pr-3">Status</th>
+              <th className="text-left pb-2 font-semibold pr-3">Flag</th>
+              <th className="text-left pb-2 font-semibold">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {userReports.map((r) => (
+              <tr key={r.id} className="border-t border-gray-100 dark:border-slate-800">
+                <td className="py-2 pr-3 font-mono text-xs text-amber-600 dark:text-amber-400">{r.id}</td>
+                <td className="py-2 pr-3 text-xs text-gray-700 dark:text-slate-300 capitalize">{r.type}</td>
+                <td className="py-2 pr-3">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400">
+                    {r.status?.replace('_',' ')}
+                  </span>
+                </td>
+                <td className="py-2 pr-3 text-xs">
+                  {r.verificationFlag === 'location_mismatch' && <span className="text-orange-600">⚠️ Location</span>}
+                  {r.verificationStatus === 'rejected' && <span className="text-red-600 dark:text-red-400">Rejected</span>}
+                  {r.verificationStatus === 'auto_verified' && <span className="text-green-600 dark:text-green-400">✓ Auto</span>}
+                </td>
+                <td className="py-2 text-xs text-gray-500 dark:text-slate-400">
+                  {new Date(r.reportedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                </td>
+              </tr>
+            ))}
+            {userReports.length === 0 && (
+              <tr><td colSpan={5} className="py-6 text-center text-xs text-gray-400 dark:text-slate-500">No reports from this user.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 overflow-auto p-4">
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">Registered Users</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Click a user to view their reports.</p>
+      </div>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="text-[11px] text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+            <th className="text-left pb-3 font-semibold pr-4">Name</th>
+            <th className="text-left pb-3 font-semibold pr-4">Phone</th>
+            <th className="text-left pb-3 font-semibold pr-4">Area</th>
+            <th className="text-left pb-3 font-semibold pr-4">Trust</th>
+            <th className="text-left pb-3 font-semibold pr-4">Tier</th>
+            <th className="text-left pb-3 font-semibold pr-4">Reports</th>
+            <th className="text-left pb-3 font-semibold pr-4">Verified</th>
+            <th className="text-left pb-3 font-semibold">Rejected</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u) => (
+            <tr key={u.id} className="border-t border-gray-100 dark:border-slate-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => setSelectedUser(u)}>
+              <td className="py-2.5 pr-4 text-xs font-semibold text-gray-900 dark:text-slate-50">{u.name}</td>
+              <td className="py-2.5 pr-4 text-xs font-mono text-gray-600 dark:text-slate-400">{u.phone}</td>
+              <td className="py-2.5 pr-4 text-xs text-gray-600 dark:text-slate-400">{u.area}</td>
+              <td className={`py-2.5 pr-4 text-xs font-bold ${trustColor(u.trustScore)}`}>{u.trustScore}</td>
+              <td className="py-2.5 pr-4">
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                  u.tier === 'trusted'    ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30' :
+                  u.tier === 'standard'  ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/30' :
+                  u.tier === 'review'    ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/30' :
+                  'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30'
+                }`}>{trustLabel(u.trustScore)}</span>
+              </td>
+              <td className="py-2.5 pr-4 text-xs text-gray-700 dark:text-slate-300">{u.reportIds?.length ?? 0}</td>
+              <td className="py-2.5 pr-4 text-xs text-blue-600 dark:text-blue-400">{u.verifiedCount}</td>
+              <td className="py-2.5 text-xs text-red-600 dark:text-red-400">{u.rejectedCount}</td>
+            </tr>
+          ))}
+          {users.length === 0 && (
+            <tr><td colSpan={8} className="py-8 text-center text-xs text-gray-400 dark:text-slate-500">No registered users.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Flagged Reports Tab ───────────────────────────────────────────────────────
+function FlaggedTab({ reports, onVerify, onReject }) {
+  const [rejectingId, setRejectingId] = useState(null)
+  const [reason, setReason] = useState('')
+
+  const flagged = reports.filter((r) =>
+    r.verificationFlag === 'location_mismatch' ||
+    r.verificationStatus === 'pending' ||
+    r.verificationStatus === 'under_review' ||
+    r.verificationStatus === 'flagged'
+  ).filter((r) => r.verificationStatus !== 'verified' && r.verificationStatus !== 'rejected' && r.status !== 'resolved')
+
+  return (
+    <div className="flex-1 overflow-auto p-4">
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">Flagged & Pending Reports</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+          Reports requiring officer attention — location mismatches, under-review, and anonymous.
+        </p>
+      </div>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="text-[11px] text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+            <th className="text-left pb-3 font-semibold pr-3">ID</th>
+            <th className="text-left pb-3 font-semibold pr-3">Reporter</th>
+            <th className="text-left pb-3 font-semibold pr-3">Flag</th>
+            <th className="text-left pb-3 font-semibold pr-3">Type</th>
+            <th className="text-left pb-3 font-semibold pr-3">Date</th>
+            <th className="text-left pb-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {flagged.map((r) => (
+            <>
+              <tr key={r.id} className="border-t border-gray-100 dark:border-slate-800">
+                <td className="py-2.5 pr-3 font-mono text-xs text-amber-600 dark:text-amber-400 align-top">{r.id}</td>
+                <td className="py-2.5 pr-3 align-top">
+                  {r.reporterName ? (
+                    <div>
+                      <span className="text-xs font-medium text-gray-800 dark:text-slate-200">{r.reporterName}</span>
+                      {r.reporterTrust != null && (
+                        <span className={`ml-1 text-[10px] font-bold ${trustColor(r.reporterTrust)}`}>
+                          · {r.reporterTrust}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400 dark:text-slate-500 italic">Anonymous</span>
+                  )}
+                </td>
+                <td className="py-2.5 pr-3 align-top">
+                  {r.verificationFlag === 'location_mismatch' && (
+                    <span className="text-[10px] bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-500/30 px-1.5 py-0.5 rounded-full font-medium">
+                      ⚠️ Location Mismatch
+                    </span>
+                  )}
+                  {r.verificationStatus === 'under_review' && (
+                    <span className="text-[10px] bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-500/30 px-1.5 py-0.5 rounded-full font-medium">
+                      ⏳ Under Review
+                    </span>
+                  )}
+                  {r.verificationStatus === 'pending' && !r.verificationFlag && (
+                    <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 border border-gray-300 dark:border-slate-600 px-1.5 py-0.5 rounded-full font-medium">
+                      Pending
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 pr-3 text-xs text-gray-600 dark:text-slate-400 capitalize align-top">{r.type}</td>
+                <td className="py-2.5 pr-3 text-xs text-gray-500 dark:text-slate-400 align-top whitespace-nowrap">
+                  {new Date(r.reportedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                </td>
+                <td className="py-2.5 align-top">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => onVerify(r)}
+                      className="text-[10px] font-medium px-2 py-1 rounded bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-500/30 transition-colors">
+                      Verify ✓
+                    </button>
+                    <button
+                      onClick={() => { setRejectingId(rejectingId === r.id ? null : r.id); setReason('') }}
+                      className="text-[10px] font-medium px-2 py-1 rounded bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors">
+                      Reject ✕
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {rejectingId === r.id && (
+                <tr key={`${r.id}-rej`}>
+                  <td colSpan={6} className="pb-3 pt-1 pl-2 pr-4">
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+                      <input type="text" placeholder="Rejection reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)}
+                        className="flex-1 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-xs rounded px-2 py-1 outline-none text-gray-900 dark:text-slate-50" />
+                      <button onClick={() => { onReject(r, reason); setRejectingId(null); setReason('') }}
+                        className="text-xs font-semibold px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white transition-colors">
+                        Confirm Reject
+                      </button>
+                      <button onClick={() => setRejectingId(null)} className="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-slate-200">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </>
+          ))}
+          {flagged.length === 0 && (
+            <tr><td colSpan={6} className="py-8 text-center text-xs text-gray-400 dark:text-slate-500">No flagged reports. All clear!</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Work Orders tab ───────────────────────────────────────────────────────────
 function WorkOrdersTab({ workOrders }) {
   const sorted  = [...workOrders].sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
@@ -938,6 +1197,30 @@ function DashboardView({ onLogout }) {
     setToast(`${report.id} dismissed${reason ? `: ${reason}` : ''}`)
   }
 
+  async function handleVerifyReport(report) {
+    try {
+      const res = await fetch(`/api/reports/${report.id}/verify`, { method: 'PATCH' })
+      if (res.ok) {
+        setReports((prev) => prev.map((r) => r.id === report.id ? { ...r, verificationStatus: 'verified', status: r.status === 'under_review' ? 'reported' : r.status } : r))
+        setToast(`${report.id} verified ✓`)
+      }
+    } catch { setToast(`Failed to verify ${report.id}`) }
+  }
+
+  async function handleRejectReport(report, reason) {
+    try {
+      const res = await fetch(`/api/reports/${report.id}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || 'Rejected by officer' }),
+      })
+      if (res.ok) {
+        setReports((prev) => prev.map((r) => r.id === report.id ? { ...r, verificationStatus: 'rejected', status: 'rejected', rejectionReason: reason } : r))
+        setToast(`${report.id} rejected`)
+      }
+    } catch { setToast(`Failed to reject ${report.id}`) }
+  }
+
   const open     = filtered.filter((r) => r.status !== 'resolved').length
   const resolved = filtered.filter((r) => r.status === 'resolved').length
   const critical = filtered.filter((r) => r.severity >= 4 && r.status !== 'resolved').length
@@ -963,7 +1246,7 @@ function DashboardView({ onLogout }) {
 
         {/* Tabs */}
         <div className="flex items-center gap-0 ml-2">
-          {[['overview', 'Overview'], ['workorders', 'Work Orders'], ['custom', 'Custom Reports']].map(([id, label]) => (
+          {[['overview', 'Overview'], ['workorders', 'Work Orders'], ['custom', 'Custom Reports'], ['flagged', 'Flagged'], ['users', 'Users']].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)}
               className={`text-xs font-semibold px-3 py-1.5 border-b-2 transition-all ${
                 activeTab === id
@@ -977,6 +1260,10 @@ function DashboardView({ onLogout }) {
               {id === 'custom' && customReports.length > 0 && (
                 <span className="ml-1.5 text-[10px] bg-gray-500 text-white rounded-full px-1.5">{customReports.length}</span>
               )}
+              {id === 'flagged' && (() => {
+                const cnt = reports.filter((r) => r.verificationFlag === 'location_mismatch' || r.verificationStatus === 'under_review' || r.verificationStatus === 'flagged').filter((r) => r.verificationStatus !== 'verified' && r.verificationStatus !== 'rejected' && r.status !== 'resolved').length
+                return cnt > 0 ? <span className="ml-1.5 text-[10px] bg-orange-500 text-white rounded-full px-1.5">{cnt}</span> : null
+              })()}
             </button>
           ))}
         </div>
@@ -1017,6 +1304,16 @@ function DashboardView({ onLogout }) {
           onAssignDirectly={handleAssignDirectly}
           onDismiss={handleDismiss}
         />
+      )}
+
+      {/* ── Flagged Reports Tab ──────────────────────────────────────────────── */}
+      {activeTab === 'flagged' && (
+        <FlaggedTab reports={reports} onVerify={handleVerifyReport} onReject={handleRejectReport} />
+      )}
+
+      {/* ── Users Tab ────────────────────────────────────────────────────────── */}
+      {activeTab === 'users' && (
+        <UsersTab reports={reports} />
       )}
 
       {/* ── Overview Tab body ─────────────────────────────────────────────────── */}
@@ -1135,6 +1432,16 @@ function DashboardView({ onLogout }) {
                       <div className="text-xs text-slate-500">{r.street} · {r.area ?? r.ward}</div>
                       {r.city && <div className="text-xs text-slate-400">{r.city}</div>}
                       <div className="text-xs mt-0.5">Severity {r.severity}/5 · {r.status}</div>
+                      {r.reporterName && (
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {r.reporterName}{r.reporterTrust != null ? ` · Trust ${r.reporterTrust}` : ''}
+                          {r.verificationStatus === 'auto_verified' && ' ✓'}
+                        </div>
+                      )}
+                      {!r.reporterName && <div className="text-xs text-slate-400 mt-0.5 italic">Anonymous</div>}
+                      {r.verificationFlag === 'location_mismatch' && (
+                        <div className="text-xs text-orange-500 font-semibold mt-0.5">⚠️ Location Mismatch</div>
+                      )}
                       {(r.confirmedBy ?? 1) > 1 && (
                         <div className="text-xs text-blue-500 font-semibold mt-0.5">{r.confirmedBy} citizens confirmed</div>
                       )}

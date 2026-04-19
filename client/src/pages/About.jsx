@@ -13,7 +13,7 @@ const STACK = [
 ]
 
 const TEAM = [
-  { name: 'Team JARVIS',      role: 'Engineering & Design',    initials: 'TJ' },
+  { name: 'CivicLens Team',   role: 'Engineering & Design',    initials: 'CL' },
 ]
 
 const HOW_IT_WORKS = [
@@ -61,11 +61,6 @@ export default function About() {
             An AI-powered civic infrastructure reporting platform built for Indian cities. Citizens report
             issues in seconds; municipal teams get intelligent clustering and priority scoring to act faster.
           </p>
-          <div className="flex items-center gap-2">
-            <span className="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-full px-3 py-1">
-              Built for FixForward by HYRUP
-            </span>
-          </div>
         </div>
 
         {/* How it works */}

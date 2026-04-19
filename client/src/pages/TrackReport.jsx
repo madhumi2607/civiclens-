@@ -196,7 +196,20 @@ export default function TrackReport() {
         {/* ── Results ────────────────────────────────────────────────────── */}
         {data && !loading && (
           <div className="flex flex-col gap-4 animate-slide-up">
+            {/* Rejected report banner */}
+            {data.rejected && (
+              <div className="card p-5 border-red-300 dark:border-red-700/60 bg-red-50 dark:bg-red-900/20 flex flex-col items-center gap-3 text-center">
+                <span className="text-4xl">🚫</span>
+                <div>
+                  <p className="font-bold text-red-800 dark:text-red-300 text-base">Report Rejected</p>
+                  <p className="text-sm text-red-700 dark:text-red-400 mt-1">{data.rejectionReason ?? 'Report rejected — location mismatch detected'}</p>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">This report has been removed from the active queue.</p>
+              </div>
+            )}
+
             {/* Header */}
+            {!data.rejected && (
             <div className="card p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 dark:text-zinc-500 mb-0.5">Tracking ID</p>
@@ -204,6 +217,16 @@ export default function TrackReport() {
                 {data.isCustom && (
                   <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded-full font-medium">
                     Custom Report
+                  </span>
+                )}
+                {data.verificationFlag === 'location_mismatch' && (
+                  <span className="text-[10px] bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-500/30 px-1.5 py-0.5 rounded-full font-medium ml-1">
+                    ⚠️ Flagged
+                  </span>
+                )}
+                {data.verificationStatus === 'auto_verified' && (
+                  <span className="text-[10px] bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-500/30 px-1.5 py-0.5 rounded-full font-medium ml-1">
+                    ✓ Auto-Verified
                   </span>
                 )}
               </div>
@@ -215,9 +238,10 @@ export default function TrackReport() {
                 {data.statuses[data.currentStep - 1]?.label ?? '—'}
               </div>
             </div>
+            )}
 
-            {/* Custom report title+description if local info has them */}
-            {localInfo?.customType && (
+            {/* Non-rejected content */}
+            {!data.rejected && localInfo?.customType && (
               <div className="card p-4 flex flex-col gap-2">
                 <p className="text-xs text-gray-500 dark:text-zinc-500 uppercase tracking-wide font-medium flex items-center gap-1.5">
                   <span>📋</span> Custom Report Details
@@ -230,7 +254,7 @@ export default function TrackReport() {
             )}
 
             {/* Local report details if available */}
-            {localInfo && !localInfo.customType && (
+            {!data.rejected && localInfo && !localInfo.customType && (
               <div className="card p-4 flex flex-col gap-2">
                 <p className="text-xs text-gray-500 dark:text-zinc-500 uppercase tracking-wide font-medium">Your Report</p>
                 <div className="flex items-center gap-2">
@@ -251,19 +275,19 @@ export default function TrackReport() {
             )}
 
             {/* Progress indicator */}
-            <div className="flex items-center gap-1.5">
+            {!data.rejected && (<div className="flex items-center gap-1.5">
               {data.statuses.map((s) => (
                 <div key={s.step} className="flex-1 flex flex-col items-center gap-1">
                   <div className={`h-1.5 w-full rounded-full ${s.done ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-700'}`} />
                 </div>
               ))}
-            </div>
-            <p className="text-xs text-gray-500 dark:text-zinc-500 text-center -mt-2">
+            </div>)}
+            {!data.rejected && <p className="text-xs text-gray-500 dark:text-zinc-500 text-center -mt-2">
               Step {data.currentStep} of 5
-            </p>
+            </p>}
 
             {/* Timeline */}
-            <div className="card p-4">
+            {!data.rejected && <div className="card p-4">
               {data.statuses.map((s, i) => {
                 let status
                 if (s.step < data.currentStep)       status = 'done'
@@ -281,7 +305,7 @@ export default function TrackReport() {
                   />
                 )
               })}
-            </div>
+            </div>}
 
             <button
               className="btn-ghost w-full"
